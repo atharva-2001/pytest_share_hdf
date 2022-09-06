@@ -21,3 +21,8 @@ class TestFoo:
     def test_arr_mul3(self, n_points):
         arr = np.array([4, 5, 6]) * n_points
         return arr
+
+    @pytest.mark.parametrize("n_points", [150, 200])
+    def test_arr_mul4(self, n_points):
+        arr = np.array([4, 5, 6]) * n_points
+        return arr
