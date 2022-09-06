@@ -1,28 +1,39 @@
-import pytest
-from functools import wraps
-import tables
 from collections import Iterable
-import pandas as pd
+from functools import wraps
+
 import numpy as np
+import pandas as pd
+import pytest
+import tables
 
 
-@pytest.fixture(autouse=True, scope="session")
-def refdata(request, fname=None):
-    print(fname)
-    fname = "test4.hdf"
+@pytest.fixture(scope="session")
+def refdata(request):
+    fname = request.config.getoption("--refdata_file_name")
+    if not fname:
+        fname = "reference.hdf"
+
     if request.config.getoption("--shared_hdf_generate"):
         hdf_file = tables.open_file(fname, "w")
     elif request.config.getoption("--shared_hdf_compare"):
         hdf_file = tables.open_file(fname, "r")
+
     yield hdf_file
     hdf_file.close()
 
 
 def pytest_addoption(parser):
     group = parser.getgroup("general")
-
     group.addoption("--shared_hdf_generate", action="store", help="")
     group.addoption("--shared_hdf_compare", action="store", help="")
+    group.addoption("--refdata_file_name", action="store", help="")
+
+
+def pytest_collection_modifyitems(config, items):
+    # TODO need to reconsider this function's necessity
+    for item in items:
+        if item.get_closest_marker("share_hdf"):
+            item.fixturenames.append("refdata")
 
 
 class ArrayComparisionHDF:
@@ -44,21 +55,12 @@ class ArrayComparisionHDF:
         compare = item.get_closest_marker("share_hdf")
         if compare is None:
             return
+        else:
+            self.refdata = item._request.getfixturevalue("refdata")
         original = item.function
 
         @wraps(item.function)
         def item_function_wrapper(*args, **kwargs):
-            self.refdata = kwargs.get("refdata", None)
-
-            if self.refdata is not None:
-                pass
-
-            # present as function argument, or result of a fixture
-            if "refdata" in kwargs:
-                self.refdata = kwargs.get("refdata", None)
-
-            # TODO: passed as a fixture implicitly?
-
             leaf_name = item.name
             leaf_name = leaf_name.replace("[", "_").replace("]", "_")
 
