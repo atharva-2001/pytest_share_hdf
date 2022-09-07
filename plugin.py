@@ -41,22 +41,21 @@ class ArrayComparisionHDF:
         self,
         config,
         refdata=None,
-        group=None,
-        generate=True,
-        compare=False,
     ):
         self.config = config
         self.refdata = refdata
-        self.group = group
-        self.compare = compare
-        self.generate = generate
 
     def pytest_runtest_setup(self, item):
         compare = item.get_closest_marker("share_hdf")
         if compare is None:
             return
         else:
+            # TODO: find alternative
             self.refdata = item._request.getfixturevalue("refdata")
+
+        self.group_where = compare.kwargs.get("where", self.refdata.root)
+        self.group_name = compare.kwargs.get("name", None)
+
         original = item.function
 
         @wraps(item.function)
@@ -66,19 +65,26 @@ class ArrayComparisionHDF:
 
             data = original(*args, **kwargs)
 
-            if self.group is None:
-                # TODO
+            if self.group_name is None:
                 group = self.refdata.root
-            else:
-                group = self.refdata.get_node(
-                    group,
-                )
 
             if self.config.getoption("--shared_hdf_generate"):
-                # save array as a leaf?
+                if self.group_name is not None:
+                    try:
+                        group = self.refdata.create_group(
+                            where=self.group_where, name=self.group_name
+                        )
+                    except tables.NodeError:
+                        group = self.refdata.get_node(
+                            where=self.group_where, name=self.group_name
+                        )
                 if isinstance(data, Iterable):
                     self.refdata.create_carray(group, name=leaf_name, obj=data)
+
             if self.config.getoption("--shared_hdf_compare"):
+                group = self.refdata.get_node(
+                    where=self.group_where, name=self.group_name
+                )
                 np.testing.assert_allclose(
                     data,
                     self.refdata.get_node(group, name=leaf_name),
