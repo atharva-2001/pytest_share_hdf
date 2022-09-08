@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import pytest
 
 
@@ -26,3 +27,8 @@ class TestFoo:
     def test_arr_mul4(self, n_points):
         arr = np.array([4, 5, 6]) * n_points
         return arr
+    
+    def test_pandas_df(self,):
+        data = range(20)
+        df = pd.DataFrame(data, columns=['Numbers'])
+        return df
