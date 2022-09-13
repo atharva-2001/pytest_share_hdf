@@ -32,3 +32,8 @@ class TestFoo:
         data = range(20)
         df = pd.DataFrame(data, columns=['Numbers'])
         return df
+    
+    # TODO
+    def test_nothing(self):
+        assert 2==2
+
