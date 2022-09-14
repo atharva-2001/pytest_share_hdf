@@ -17,6 +17,8 @@ def refdata(request):
         hdf_file = tables.open_file(fname, "w")
     elif request.config.getoption("--shared_hdf_compare"):
         hdf_file = tables.open_file(fname, "r")
+    else:
+        raise ValueError("No generate/compare option found.")
 
     yield hdf_file
     hdf_file.close()
@@ -32,6 +34,8 @@ def store_refdata(request):
         store = pd.HDFStore(fname, mode="a")
     elif request.config.getoption("--shared_hdf_compare"):
         store = pd.HDFStore(fname, mode="r")
+    else:
+        raise ValueError("No generate/compare option found.")
 
     yield store
     store.close()
@@ -59,6 +63,8 @@ class ArrayComparisionHDF:
     ):
         self.config = config
         self.refdata = refdata
+        # self.request  = None
+        print(dir(config))
 
     def pytest_runtest_setup(self, item):
         compare = item.get_closest_marker("share_hdf")
@@ -66,7 +72,8 @@ class ArrayComparisionHDF:
             return
         else:
             # TODO: find alternative
-            self.refdata = item._request.getfixturevalue("refdata")
+            self.refdata = self.request.getfixturevalue("refdata")
+            # self.refdata = item._request.getfixturevalue("refdata")
             self.store_refdata = item._request.getfixturevalue("store_refdata")
 
         self.group_where = compare.kwargs.get("where", self.refdata.root)
