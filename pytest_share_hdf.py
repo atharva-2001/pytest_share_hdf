@@ -7,38 +7,48 @@ import pytest
 import tables
 
 
-@pytest.fixture(scope="session")
-def refdata(request):
-    fname = request.config.getoption("--refdata_file_name")
-    if not fname:
-        fname = "reference.hdf"
+# @pytest.fixture(scope="session")
+# def store_refdata(request):
+#     fname = request.config.getoption("--refdata_file_name")
+#     if not fname:
+#         fname = "reference.hdf"
 
-    if request.config.getoption("--shared_hdf_generate"):
-        hdf_file = tables.open_file(fname, "w")
-    elif request.config.getoption("--shared_hdf_compare"):
-        hdf_file = tables.open_file(fname, "r")
-    else:
-        raise ValueError("No generate/compare option found.")
+#     if request.config.getoption("--shared_hdf_generate"):
+#         store = pd.HDFStore(fname, mode="a")
+#     elif request.config.getoption("--shared_hdf_compare"):
+#         store = pd.HDFStore(fname, mode="r")
+#     else:
+#         raise ValueError("No generate/compare option found.")
 
-    yield hdf_file
-    hdf_file.close()
+#     yield store
+#     store.close()
 
 
-@pytest.fixture(scope="session")
-def store_refdata(request):
-    fname = request.config.getoption("--refdata_file_name")
-    if not fname:
-        fname = "reference.hdf"
+# object to be stashed?
+class Reference:
+    def __init__(self, request=None, config=None, fname="reference.hdf") -> None:
+        self.request = request
+        self.config = config
+        self.fname = fname
+        self.file = None
+        self.setup()
 
-    if request.config.getoption("--shared_hdf_generate"):
-        store = pd.HDFStore(fname, mode="a")
-    elif request.config.getoption("--shared_hdf_compare"):
-        store = pd.HDFStore(fname, mode="r")
-    else:
-        raise ValueError("No generate/compare option found.")
+    def setup(self):
+        if self.config.getoption("--shared_hdf_generate"):
+            self.file = tables.open_file(self.fname, "w")
+        elif self.config.getoption("--shared_hdf_compare"):
+            self.file = tables.open_file(self.fname, "r")
+        else:
+            # TODO handle no option case
+            pass            
+        # TODO: support for dataframes
 
-    yield store
-    store.close()
+    def teardown(self):
+        if self.file:
+            self.file.close()
+
+
+reference_key = pytest.StashKey[Reference]()
 
 
 def pytest_addoption(parser):
@@ -48,12 +58,12 @@ def pytest_addoption(parser):
     group.addoption("--refdata_file_name", action="store", help="")
 
 
-def pytest_collection_modifyitems(config, items):
-    # TODO need to reconsider this function's necessity
-    for item in items:
-        if item.get_closest_marker("share_hdf"):
-            item.fixturenames.extend(["refdata", "store_refdata"])
+def pytest_collection_modifyitems(session, config, items):
+    # TODO use pytest_sessionstart instead?
+    session.stash[reference_key] = Reference(config=config)
 
+def pytest_sessionfinish(session):
+    session.stash[reference_key].teardown()
 
 class ArrayComparisionHDF:
     def __init__(
@@ -63,18 +73,17 @@ class ArrayComparisionHDF:
     ):
         self.config = config
         self.refdata = refdata
-        # self.request  = None
-        print(dir(config))
 
     def pytest_runtest_setup(self, item):
         compare = item.get_closest_marker("share_hdf")
+        session = item.session
+
         if compare is None:
             return
         else:
-            # TODO: find alternative
-            self.refdata = self.request.getfixturevalue("refdata")
-            # self.refdata = item._request.getfixturevalue("refdata")
-            self.store_refdata = item._request.getfixturevalue("store_refdata")
+            self.refdata = session.stash[reference_key].file
+            # self.store_refdata = item._request.getfixturevalue("store_refdata")
+            self.store_refdata = None
 
         self.group_where = compare.kwargs.get("where", self.refdata.root)
         self.group_name = compare.kwargs.get("name", None)
@@ -122,9 +131,11 @@ class ArrayComparisionHDF:
             setattr(item.cls, item.function.__name__, item_function_wrapper)
         else:
             item.obj = item_function_wrapper
+      
 
-
-def pytest_configure(config):
+def pytest_configure(
+    config,
+):
     config.pluginmanager.register(
         ArrayComparisionHDF(
             config,
