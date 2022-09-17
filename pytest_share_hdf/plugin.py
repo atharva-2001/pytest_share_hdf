@@ -14,7 +14,6 @@ class Reference:
         self.setup()
 
     def setup(self):
-        self.fname = "reference.hdf"
         if self.config.getoption("--shared_hdf_generate"):
             self.option = "generate"
             self.tables_file = tables.open_file(self.fname, "w")
@@ -63,7 +62,7 @@ def pytest_sessionfinish(session):
         reference.teardown()
 
 
-class ArrayComparisionHDF:
+class ArrayComparisonHDF:
     def __init__(
         self,
         config,
@@ -139,7 +138,7 @@ def pytest_configure(
 ):
     config.getini("markers").append("share_hdf")
     config.pluginmanager.register(
-        ArrayComparisionHDF(
+        ArrayComparisonHDF(
             config,
         ),
         name="pytest_share_hdf",
