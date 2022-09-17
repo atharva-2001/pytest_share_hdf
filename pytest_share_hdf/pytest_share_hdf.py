@@ -24,28 +24,32 @@ import tables
 #     store.close()
 
 
-# object to be stashed?
 class Reference:
-    def __init__(self, request=None, config=None, fname="reference.hdf") -> None:
-        self.request = request
+    def __init__(self, config=None) -> None:
         self.config = config
-        self.fname = fname
-        self.file = None
+        self.tables_file = None
+        self.store_file = None
+        self.fname = self.config.getoption("--refdata_file_name")
         self.setup()
 
     def setup(self):
+        self.fname = "reference.hdf"
         if self.config.getoption("--shared_hdf_generate"):
-            self.file = tables.open_file(self.fname, "w")
+            self.tables_file = tables.open_file(self.fname, "w")
+            self.store_file = pd.HDFStore(self.fname, mode="a")
         elif self.config.getoption("--shared_hdf_compare"):
-            self.file = tables.open_file(self.fname, "r")
+            self.tables_file = tables.open_file(self.fname, "r")
+            self.store_file = pd.HDFStore(self.fname, mode="r")
         else:
             # TODO handle no option case
-            pass            
+            pass
         # TODO: support for dataframes
 
     def teardown(self):
-        if self.file:
-            self.file.close()
+        if self.store_file:
+            self.store_file.close()
+        if self.tables_file:
+            self.tables_file.close()
 
 
 reference_key = pytest.StashKey[Reference]()
@@ -53,17 +57,23 @@ reference_key = pytest.StashKey[Reference]()
 
 def pytest_addoption(parser):
     group = parser.getgroup("general")
-    group.addoption("--shared_hdf_generate", action="store", help="")
-    group.addoption("--shared_hdf_compare", action="store", help="")
-    group.addoption("--refdata_file_name", action="store", help="")
+    group.addoption("--shared_hdf_generate", action="store_true", help="")
+    group.addoption("--shared_hdf_compare", action="store_true", help="")
+    group.addoption(
+        "--refdata_file_name", action="store", default="reference.hdf", help=""
+    )
 
 
-def pytest_collection_modifyitems(session, config, items):
+def pytest_collection_modifyitems(session, config):
     # TODO use pytest_sessionstart instead?
+    print("collection done")
     session.stash[reference_key] = Reference(config=config)
 
 def pytest_sessionfinish(session):
+    print("did the session finish?")
     session.stash[reference_key].teardown()
+
+
 
 class ArrayComparisionHDF:
     def __init__(
@@ -81,9 +91,9 @@ class ArrayComparisionHDF:
         if compare is None:
             return
         else:
-            self.refdata = session.stash[reference_key].file
-            # self.store_refdata = item._request.getfixturevalue("store_refdata")
-            self.store_refdata = None
+            self.reference = session.stash[reference_key]
+            self.refdata = self.reference.tables_file
+            self.store_refdata = self.reference.store_file
 
         self.group_where = compare.kwargs.get("where", self.refdata.root)
         self.group_name = compare.kwargs.get("name", None)
@@ -131,11 +141,13 @@ class ArrayComparisionHDF:
             setattr(item.cls, item.function.__name__, item_function_wrapper)
         else:
             item.obj = item_function_wrapper
-      
+
 
 def pytest_configure(
     config,
 ):
+    config.getini('markers').append(
+        'share_hdf')
     config.pluginmanager.register(
         ArrayComparisionHDF(
             config,
