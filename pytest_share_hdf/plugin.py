@@ -47,19 +47,20 @@ def pytest_addoption(parser):
 
 def pytest_collection_modifyitems(session, config, items):
     # TODO use pytest_sessionstart instead?
-    session.stash[reference_key] = Reference(config=config)
-    for item in items:
-        if not config.getoption("--shared_hdf_generate") and not config.getoption(
+    if not config.getoption("--shared_hdf_generate") and not config.getoption(
             "--shared_hdf_compare"
-        ):  
-            item.add_marker(pytest.mark.skip)
-        else:
-            session.stash[reference_key] = Reference(config=config)
+        ): 
+        for item in items:
+            if item.get_closest_marker("share_hdf"):
+                item.add_marker(pytest.mark.skip)
+    else:
+        session.stash[reference_key] = Reference(config=config)
 
 
 def pytest_sessionfinish(session):
-    if not session.stash.get(reference_key, None):
-        session.stash[reference_key].teardown()
+    reference = session.stash.get(reference_key, None)
+    if reference is not None:
+        reference.teardown()
 
 
 class ArrayComparisionHDF:
