@@ -47,8 +47,8 @@ def pytest_addoption(parser):
 def pytest_collection_modifyitems(session, config, items):
     # TODO use pytest_sessionstart instead?
     if not config.getoption("--shared_hdf_generate") and not config.getoption(
-            "--shared_hdf_compare"
-        ): 
+        "--shared_hdf_compare"
+    ):
         for item in items:
             if item.get_closest_marker("share_hdf"):
                 item.add_marker(pytest.mark.skip)
@@ -120,7 +120,10 @@ class ArrayComparisonHDF:
                     where=self.group_where, name=self.group_name
                 )
                 if isinstance(data, pd.DataFrame):
-                    pd.testing.assert_frame_equal(data, self.store_refdata[leaf_name])
+                    pd.testing.assert_frame_equal(
+                        data,
+                        self.store_refdata[leaf_name],
+                    )
                 elif isinstance(data, Iterable):
                     np.testing.assert_allclose(
                         data,
